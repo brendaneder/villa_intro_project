@@ -2,11 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-import cupy as cp
-print(cp.cuda.runtime.getDeviceCount())
-
 import time
 start = time.time()
+
+plot = False 
 
 
 # -----------------------------
@@ -14,7 +13,7 @@ start = time.time()
 # -----------------------------
 np.random.seed(42)  # used only if you keep legacy RNG elsewhere
 
-uniform = False
+uniform = True
 
 B  = 1.0
 Cp = 1.0
@@ -22,7 +21,7 @@ c  = 1.5  # mm/us
 
 t_min = 0.0
 t_max = 40
-sample_rate = 60.0    # Hz, times per us  (== samples/us)
+sample_rate = 40.0    # Hz, times per us  (== samples/us)
 dt = 1.0 / sample_rate
 
 detectors_center = np.array([0.0, 0.0 , 0.0], dtype=np.float32)
@@ -217,4 +216,10 @@ axes[1].set_ylabel("Depth (mm)")
 axes[1].set_title("DAS image")
 fig.colorbar(im1, ax=axes[1], label="DAS amplitude")
 
-plt.show()
+
+if plot:
+    plt.show()
+
+
+np.savez("output_data.npz", t_vals=t_vals, pressure_composit=pressure_composit, das_img=das_img, dt=dt)
+print("Saved: output_data.npz")
