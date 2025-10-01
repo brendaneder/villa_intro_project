@@ -5,7 +5,7 @@ import matplotlib.colors as mcolors
 import time
 start = time.time()
 
-plot = True 
+plot = False 
 
 
 # -----------------------------

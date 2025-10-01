@@ -18,13 +18,16 @@ import numpy.fft as fft
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+plt_das = 0
+
 # -----------------------------
 # Geometry & discretization
 # -----------------------------
 pitch_x_mm           = 0.2      # center-to-center spacing along X (mm)
 aperture_width_x_mm  = pitch_x_mm  # element width in X (mm)
-aperture_height_y_mm = 1.0      # element height in Y (mm)
-n_div                = 10       # <-- number of sub-rectangles per side (n×n). Increase for accuracy.
+aperture_height_y_mm = 10      # element height in Y (mm)
+n_div_y              = 100     # <-- number of sub-rectangles per y-axis (n). Increase for accuracy.
+n_div_x              = 1       # number of x-divisions (usually 1)
 
 # -----------------------------
 # EIR parameters (Gaussian-in-frequency, matching your EIS.py style)
@@ -56,12 +59,12 @@ Npad  = 2 * Nt
 freqs = fft.fftfreq(Npad, d=dt).astype(np.float32)  # [MHz] = 1/us
 
 # sigmoid
-def H_function(x, k = 9, a0 = 4, b0 = 12):
-    sig_a = 1 / ( 1 + np.exp( -k * (x - a0)))
-    sig_b = 1 / ( 1 + np.exp( -k * (x - b0)))
+def H_function(x, k = 9, a0 = 0.5, b0 = 9):
+    sig_a = 1 / ( 1 + np.exp( -k * (np.abs(x) - a0)))
+    sig_b = 1 / ( 1 + np.exp( -k * (np.abs(x) - b0)))
 
     scale = np.abs( sig_a - sig_b )
-    return scale
+    return np.ones(len(x))
 
 H_eir = H_function(freqs).astype(np.float32)
 
@@ -107,8 +110,8 @@ ay = float(aperture_height_y_mm)
 
 # Create n_div centers in each axis spanning [-ax/2, ax/2] and [-ay/2, ay/2]
 # Using "pixel center" convention (no patch exactly on the edge)
-x_centers = (np.arange(n_div, dtype=np.float32) + 0.5) / n_div * ax - ax / 2.0  # (n_div,)
-y_centers = (np.arange(n_div, dtype=np.float32) + 0.5) / n_div * ay - ay / 2.0  # (n_div,)
+x_centers = (np.arange(n_div_x, dtype=np.float32) + 0.5) / n_div_x * ax - ax / 2.0  # (n_div,)
+y_centers = (np.arange(n_div_y, dtype=np.float32) + 0.5) / n_div_y * ay - ay / 2.0  # (n_div,)
 XX, YY    = np.meshgrid(x_centers, y_centers, indexing='xy')                    # (n_div,n_div)
 patch_xy  = np.stack([XX.ravel(), YY.ravel()], axis=1).astype(np.float32)       # (n_patch,2)
 n_patch   = int(patch_xy.shape[0])
@@ -208,7 +211,7 @@ elt_plot = 62 if Nd >= 63 else Nd - 1
 plt.figure(figsize=(10, 5))
 plt.plot(t_vals, pressure_analytic[elt_plot], label="Analytical (true)")
 plt.plot(t_vals, p_eir_only[elt_plot],      label="EIR only")
-plt.plot(t_vals, p_sir_eir[elt_plot],      label=f"SIR(n={n_div}×{n_div}) + EIR")
+plt.plot(t_vals, p_sir_eir[elt_plot],      label=f"SIR(X x Y ={n_div_x}×{n_div_y}) + EIR")
 plt.title(f"Transducer element #{elt_plot+1} pressure vs time")
 plt.xlabel("time (µs)")
 plt.ylabel("pressure (arb.)")
@@ -219,6 +222,8 @@ plt.show()
 # -----------------------------
 # DAS (delay-and-sum) helper with linear interp
 # -----------------------------
+
+
 def compute_das(pressure_traces, detectors_xyz, c_mm_us, t_min, dt_us, z_vals_mm):
     Nd, Nt = pressure_traces.shape
     das_x = detectors_xyz[:, 0].astype(np.float32)
@@ -279,7 +284,9 @@ im2 = imshow_centered(axes[2], das_sir_eir,  f"DAS (SIR n={n_div}×{n_div}) + EI
 fig.colorbar(im0, ax=axes[0], label="DAS amplitude")
 fig.colorbar(im1, ax=axes[1], label="DAS amplitude")
 fig.colorbar(im2, ax=axes[2], label="DAS amplitude")
-plt.show()
+
+if plt_das:
+    plt.show()
 
 # -----------------------------
 # Save arrays for later use
@@ -299,7 +306,8 @@ np.savez(
     aperture_width_x_mm=aperture_width_x_mm,
     aperture_height_y_mm=aperture_height_y_mm,
     pitch_x_mm=pitch_x_mm,
-    n_div=n_div,
+    n_div_x=n_div_x,
+    n_div_y=n_div_y,
     f0_MHz=f0_MHz
 )
 print("Saved: sir_eir_outputs.npz")

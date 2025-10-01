@@ -37,7 +37,14 @@ sigma = np.sqrt( f0 / np.log( 2 ) )
 freqs = fft.fftfreq( 2 * n_time, d = dt_us)
 
 # Create H, the mdoulation based on EIR
-h = np.exp( -1 * ( ( np.abs( freqs ) - f0 ) ** 2 ) / ( 2 * sigma ** 2 ) )
+def H_function(x, k = 9, a0 = 0.5, b0 = 9):
+    sig_a = 1 / ( 1 + np.exp( -k * (np.abs(x) - a0)))
+    sig_b = 1 / ( 1 + np.exp( -k * (np.abs(x) - b0)))
+
+    scale = np.abs( sig_a - sig_b )
+    return scale
+
+h = H_function(freqs).astype(np.float32)
 
 # perform the FFT
 data_fft = fft.fft( padded_data , n = len_padded_data , axis = 1 )
