@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy.fft as fft
-
+import matplotlib.colors as mcolors
 
 import time
 start = time.time()
@@ -74,9 +74,9 @@ plt.show()
 #        making 0 pressure map to white (centered colormap)
 #        to mirror the style in 2_Analytical_Solution_Final.py
 # ======================================================
-try:
-    import matplotlib.colors as mcolors
 
+    
+if plt_heatmaps:
     # Expect these from output_data.npz produced by 2_Analytical_Solution_Final.py
     detectors = data["detectors"]      # (Nd, 3)
     c         = float(data["c"])       # speed [mm/us]
@@ -159,7 +159,3 @@ try:
 
     plt.show()
 
-except KeyError as e:
-    print("DAS plotting skipped: missing key in 'output_data.npz':", e)
-except Exception as e:
-    print("DAS plotting encountered an error:", repr(e))

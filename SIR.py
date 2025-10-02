@@ -18,7 +18,9 @@ import numpy.fft as fft
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-plt_das = 0
+plt_das = 1
+
+bump_func = 1
 
 # -----------------------------
 # Geometry & discretization
@@ -38,7 +40,12 @@ sigma  = np.sqrt(f0_MHz / np.log(2.0))
 # -----------------------------
 # Load analytical base data
 # -----------------------------
-D = np.load("output_data.npz")
+if bump_func:
+    D = np.load("output_data_bump.npz") 
+else:
+    D = np.load("output_data.npz")
+
+
 t_vals   = D["t_vals"].astype(np.float32)              # [us]
 dt       = float(D["dt"])                              # [us]
 det      = D["detectors"].astype(np.float32)           # (Nd,3)
@@ -279,7 +286,7 @@ def imshow_centered(ax, img, title):
 
 im0 = imshow_centered(axes[0], das_analytic, f"DAS (Analytical)")
 im1 = imshow_centered(axes[1], das_eir,      f"DAS (EIR only)")
-im2 = imshow_centered(axes[2], das_sir_eir,  f"DAS (SIR n={n_div}×{n_div}) + EIR")
+im2 = imshow_centered(axes[2], das_sir_eir,  f"DAS (SIR n={n_div_x}×{n_div_y}) + EIR")
 
 fig.colorbar(im0, ax=axes[0], label="DAS amplitude")
 fig.colorbar(im1, ax=axes[1], label="DAS amplitude")
