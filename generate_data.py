@@ -3,12 +3,15 @@ import numpy as np
 import numpy.fft as fft
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import time
+
 
 np.random.seed(42)
 
-i = 0
+starting_run = 45
 n_runs = 500
 
+start = time.time()
 
 plt_trace = 0
 plt_das = 0
@@ -35,12 +38,34 @@ def make_spheres(n_spheres=1,
                  y_bounds=(-12, 12),
                  z_bounds=(-32,  -8),
                  r_bounds=(  0.5,   2.0)):
-    rng = np.random.default_rng(42)
-    x = rng.uniform(*x_bounds, size=n_spheres).astype(np.float32)
-    y = rng.uniform(*y_bounds, size=n_spheres).astype(np.float32)
-    z = rng.uniform(*z_bounds, size=n_spheres).astype(np.float32)
-    r = rng.uniform(*r_bounds, size=n_spheres).astype(np.float32)
-    return np.column_stack([x, y, z, r]).astype(np.float32)
+    
+    x = np.random.uniform(*x_bounds, size=n_spheres).astype(np.float32)
+    y = np.random.uniform(*y_bounds, size=n_spheres).astype(np.float32)
+    z = np.random.uniform(*z_bounds, size=n_spheres).astype(np.float32)
+    r = np.random.uniform(*r_bounds, size=n_spheres).astype(np.float32)
+
+    if n_spheres > 1:
+        for i in range(n_spheres-1):
+            for j in range(i+1, n_spheres):
+
+                dx = x[i] - x[j]
+                dy = y[i] - y[j]
+                dz = z[i] - z[j]
+
+                true_distance = np.linalg.norm((dx, dy, dz))
+                min_distance = r[i] + r[j]
+
+                
+                if true_distance <= min_distance:
+                    print("Real distance {:.2f} < {:.2f} min distance".format(true_distance, min_distance))
+                    make_spheres(n_spheres,
+                    x_bounds,
+                    y_bounds,
+                    z_bounds,
+                    r_bounds)
+    spheres = np.column_stack([x, y, z, r]).astype(np.float32)
+    print(spheres)
+    return spheres
 
 
 
@@ -379,8 +404,12 @@ def run_sir_eir(det, t_vals, c, B, Cp, H_eir, patch_xy, det_x, det_y, det_z,
     )
 
 
-
-while i <n_runs:
+i = starting_run
+while i < n_runs:
+    if i % 10 == 0:
+        end = time.time()
+        print("Execution time:", end - start, "seconds")
+        start = time.time()
     
     filename = folder / f"sir_eir_outputs_{i}.npz"
     spheres = make_spheres(n_spheres)
@@ -390,5 +419,6 @@ while i <n_runs:
                 aperture_width_x_mm, aperture_height_y_mm,
                 pitch_x_mm, n_div_x, n_div_y, f0_MHz, Nd)
     print(i)
+
 
     i+=1

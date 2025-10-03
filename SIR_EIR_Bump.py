@@ -18,11 +18,18 @@ import numpy.fft as fft
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+
 plt_trace = 1
-plt_das = 1
+plt_das = 0
+plt_3d = 1
 bump_func = 1
-uniform = 0
+uniform = 1
 n_spheres = 6
+
+x_bounds=(-15, 15)
+y_bounds=(-15, 15)
+z_bounds=(-35,  -5)
+r_bounds=(  0.5,   2.0)
 
 B  = 1.0
 Cp = 1.0
@@ -39,10 +46,10 @@ t_npoints = t_vals.size
 detectors_center = np.array([0.0, 0.0 , 0.0], dtype=np.float32)
 
 def make_spheres(n_spheres=1,
-                 x_bounds=(-12, 12),
-                 y_bounds=(-12, 12),
-                 z_bounds=(-32,  -8),
-                 r_bounds=(  0.5,   2.0)):
+                 x_bounds=x_bounds,
+                 y_bounds=y_bounds,
+                 z_bounds=z_bounds,
+                 r_bounds=r_bounds):
     rng = np.random.default_rng(42)
     x = rng.uniform(*x_bounds, size=n_spheres).astype(np.float32)
     y = rng.uniform(*y_bounds, size=n_spheres).astype(np.float32)
@@ -396,3 +403,81 @@ np.savez(
     f0_MHz=f0_MHz
 )
 print("Saved: sir_eir_outputs.npz")
+
+
+if plt_3d:
+    def _map_y_to_intensity(y, y_min, y_max):
+
+        if y_max == y_min:
+            # Avoid divide-by-zero: constant gray at 100/255
+            return np.full_like(y, 100 / 255.0, dtype=float)
+        y_clipped = np.clip(y, y_min, y_max)
+        return (100.0 + (y_clipped - y_min) * 155.0 / (y_max - y_min)) / 255.0
+
+
+    def plot_spheres_xz(
+        spheres: np.ndarray,
+        xlim: tuple,
+        ylim: tuple,
+        zlim: tuple,
+        resolution: int = 800,
+        show: bool = True,
+        save_path: str | None = None,
+    ):
+        x_min, x_max = xlim
+        y_min, y_max = ylim
+        z_min, z_max = zlim
+
+        width = x_max - x_min
+        height = z_max - z_min
+        if width <= 0 or height <= 0:
+            raise ValueError("xlim and zlim must have positive extents (max > min).")
+
+        # Grid size preserving aspect ratio
+        if width >= height:
+            nx = int(resolution)
+            nz = max(1, int(round(resolution * (height / width))))
+        else:
+            nz = int(resolution)
+            nx = max(1, int(round(resolution * (width / height))))
+
+        xs = np.linspace(x_min, x_max, nx)
+        zs = np.linspace(z_min, z_max, nz)
+        X, Z = np.meshgrid(xs, zs)
+
+        # Start with black background
+        img = np.zeros((nz, nx), dtype=float)
+
+        # Paint each sphere's circle in XZ with intensity based on its Y
+        # Overlaps: keep the brighter (max) intensity
+        if spheres is not None and spheres.size > 0:
+            for sx, sy, sz, r in np.asarray(spheres, dtype=float):
+                if r <= 0:
+                    continue
+                # Quick reject if outside view
+                if (sx + r) < x_min or (sx - r) > x_max or (sz + r) < z_min or (sz - r) > z_max:
+                    continue
+                mask = (X - sx) ** 2 + (Z - sz) ** 2 <= r ** 2
+                if not np.any(mask):
+                    continue
+                intensity = _map_y_to_intensity(np.array([sy]), y_min, y_max)[0]
+                img[mask] = np.maximum(img[mask], intensity)
+
+        extent = (x_min, x_max, z_min, z_max)
+
+        if show or save_path is not None:
+            plt.figure(figsize=(6, 6 * (nz / nx)))
+            plt.imshow(img, extent=extent, origin="lower", cmap="gray", vmin=0.0, vmax=1.0)
+            plt.xlabel("X")
+            plt.ylabel("Z")
+            plt.title("XZ Projection of Spheres (Y → intensity)")
+            if save_path is not None:
+                plt.savefig(save_path, dpi=150, bbox_inches="tight")
+            if show:
+                plt.show()
+            else:
+                plt.close()
+
+        return img, extent
+
+    plot_spheres_xz(spheres, x_bounds, y_bounds, z_bounds, resolution=1000, show=True)
