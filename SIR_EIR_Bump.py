@@ -21,6 +21,73 @@ import matplotlib.colors as mcolors
 plt_trace = 1
 plt_das = 1
 bump_func = 1
+uniform = 1
+
+B  = 1.0
+Cp = 1.0
+c  = 1.5  # mm/us
+
+t_min = 0.0
+t_max = 40
+sample_rate = 40.0    # samples/us
+dt = 1.0 / sample_rate
+
+t_vals = np.arange(t_min, t_max, dt, dtype=np.float32)
+t_npoints = t_vals.size
+
+detectors_center = np.array([0.0, 0.0 , 0.0], dtype=np.float32)
+
+def make_spheres(n_spheres=1,
+                 x_bounds=(-15.0, 15.0),
+                 y_bounds=(-15.0, 15.0),
+                 z_bounds=(-35.0,  -5.0),
+                 r_bounds=(  0.5,   2.0)):
+    rng = np.random.default_rng(42)
+    x = rng.uniform(*x_bounds, size=n_spheres).astype(np.float32)
+    y = rng.uniform(*y_bounds, size=n_spheres).astype(np.float32)
+    z = rng.uniform(*z_bounds, size=n_spheres).astype(np.float32)
+    r = rng.uniform(*r_bounds, size=n_spheres).astype(np.float32)
+    return np.column_stack([x, y, z, r]).astype(np.float32)
+
+if uniform:
+    spheres = np.zeros((5, 4), dtype=np.float32)
+    for i in range(5):
+        spheres[i] = np.array([0, 0+np.sqrt(i)*3, -10.0 - 5.0 * i, 1.0], dtype=np.float32)
+else:
+    spheres = make_spheres(n_spheres=6)
+
+# -----------------------------
+# Detector grid (vectorized)
+# -----------------------------
+x_npoints_detector, y_npoints_detector = 128, 1
+x_spacing_detector, y_spacing_detector = 0.2, 0.2  # mm
+
+ix = np.arange(x_npoints_detector, dtype=np.float32)
+jy = np.arange(y_npoints_detector, dtype=np.float32)
+X, Y = np.meshgrid(ix * x_spacing_detector, jy * y_spacing_detector, indexing='ij')
+
+detectors = np.column_stack((
+    X.ravel(),
+    Y.ravel(),
+    np.zeros(X.size, dtype=np.float32)
+)).astype(np.float32)
+
+detectors -= detectors.mean(axis=0).astype(np.float32)
+detectors += detectors_center.astype(np.float32)
+
+Nd = detectors.shape[0]
+Ns = spheres.shape[0]
+Nt = t_npoints
+
+det      = detectors          # (Nd,3)
+
+
+
+
+
+
+
+
 
 # -----------------------------
 # Geometry & discretization
@@ -37,25 +104,11 @@ n_div_x              = 1       # number of x-divisions (usually 1)
 f0_MHz = 8.0
 sigma  = np.sqrt(f0_MHz / np.log(2.0))
 
-# -----------------------------
-# Load analytical base data
-# -----------------------------
-if bump_func:
-    D = np.load("output_data_bump.npz") 
-    print('output_data_bump.npz loaded')
-else:
-    D = np.load("output_data.npz")
-    print('output_data.npz loaded')
 
 
-t_vals   = D["t_vals"].astype(np.float32)              # [us]
-dt       = float(D["dt"])                              # [us]
-det      = D["detectors"].astype(np.float32)           # (Nd,3)
-spheres  = D["spheres"].astype(np.float32)             # (Ns,4): (x,y,z,r) in mm
-c        = float(D["c"])                               # [mm/us]
-# Optional material constants used in your analytical derivation (fallback to 1)
-B  = float(D.get("B", 1.0))
-Cp = float(D.get("Cp", 1.0))
+
+
+
 
 Nd = det.shape[0]
 Ns = spheres.shape[0]
