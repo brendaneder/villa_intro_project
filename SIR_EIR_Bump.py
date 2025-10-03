@@ -18,8 +18,8 @@ import numpy.fft as fft
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+plt_trace = 1
 plt_das = 1
-
 bump_func = 1
 
 # -----------------------------
@@ -42,8 +42,10 @@ sigma  = np.sqrt(f0_MHz / np.log(2.0))
 # -----------------------------
 if bump_func:
     D = np.load("output_data_bump.npz") 
+    print('output_data_bump.npz loaded')
 else:
     D = np.load("output_data.npz")
+    print('output_data.npz loaded')
 
 
 t_vals   = D["t_vals"].astype(np.float32)              # [us]
@@ -59,6 +61,8 @@ Nd = det.shape[0]
 Ns = spheres.shape[0]
 Nt = int(t_vals.size)
 
+
+
 # -----------------------------
 # Frequency axis and EIR
 # -----------------------------
@@ -66,12 +70,12 @@ Npad  = 2 * Nt
 freqs = fft.fftfreq(Npad, d=dt).astype(np.float32)  # [MHz] = 1/us
 
 # sigmoid
-def H_function(x, k = 9, a0 = 0.5, b0 = 9):
+def H_function(x, k = 9, a0 = .5, b0 = 9):
     sig_a = 1 / ( 1 + np.exp( -k * (np.abs(x) - a0)))
     sig_b = 1 / ( 1 + np.exp( -k * (np.abs(x) - b0)))
 
     scale = np.abs( sig_a - sig_b )
-    return np.ones(len(x))
+    return scale
 
 H_eir = H_function(freqs).astype(np.float32)
 
@@ -79,7 +83,7 @@ H_eir = H_function(freqs).astype(np.float32)
 # -----------------------------
 # Helper
 # -----------------------------
-def build_per_sphere_true_traces(det_xyz, sph, t_vals, c, B=1.0, Cp=1.0):
+def build_per_sphere_true_traces(det_xyz, sph, t_vals, c, B=1.0, Cp=1.0, bump_func=bump_func):
     """
     Recreate per-sphere analytical contributions p_s(q,t) (Nd×Nt) matching your time-of-flight
     and geometric-spreading model. This mirrors the construction used in Analytical.py
@@ -102,11 +106,29 @@ def build_per_sphere_true_traces(det_xyz, sph, t_vals, c, B=1.0, Cp=1.0):
 
     t0 = ((r - sr) / c).astype(np.float32)                 # (Nd,1)
     t1 = ((r + sr) / c).astype(np.float32)                 # (Nd,1)
-    mask = ((t >= t0) & (t <= t1)).astype(np.float32)      # (Nd,Nt)
+    
 
-    # Linear segment: A0 - B0 * t over [t0, t1]
-    p_s = (A0 - B0 * t) * mask                             # (Nd,Nt)
-    return p_s, r  # return r for SIR reference
+
+    
+    if bump_func:
+        mask = ((t > t0) & (t < t1)).astype(np.float32)      # (Nd,Nt)
+        
+        t_mid    = 0.5 * (t0 + t1)        # (Nd,1)
+        t_radius = 0.5 * (t1 - t0)        # (Nd,1)
+
+
+        bump = np.where( mask , np.exp( 1 /( ((t-t_mid) / t_radius) ** 2 -1) ), 0.0)
+
+        # Multiply the N-wave by the bump; bump broadcasts across time (Nd,1) → (Nd,Nt)
+        p_s = (A0 - B0 * t) * mask * bump                  # (Nd,Nt)
+
+    else:
+        # Standard N-wave (no bump)
+        mask = ((t >= t0) & (t <= t1)).astype(np.float32)      # (Nd,Nt)
+        p_s = (A0 - B0 * t) * mask                         # (Nd,Nt)
+
+    
+    return p_s, r, bump  # return r for SIR reference
 
 # -----------------------------
 # Patch positions (relative to element center)
@@ -143,7 +165,7 @@ for s_idx in range(Ns):
     sph = spheres[s_idx]
 
     # 1) True per-sphere time signal at each detector + center ranges r0(q)
-    p_s, r0 = build_per_sphere_true_traces(det, sph, t_vals, c, B=B, Cp=Cp)  # p_s: (Nd,Nt), r0: (Nd,1)
+    p_s, r0, bump = build_per_sphere_true_traces(det, sph, t_vals, c, B=B, Cp=Cp)  # p_s: (Nd,Nt), r0: (Nd,1)
 
     # FFT with zero-padding → P_s(q,f)
     P_s = fft.fft(np.concatenate([p_s, np.zeros_like(p_s)], axis=1), n=Npad, axis=1)  # (Nd,Npad)
@@ -202,7 +224,7 @@ p_sir_eir   = np.real(fft.ifft(P_sir_eir_f, n=Npad, axis=1))[:, :Nt].astype(np.f
 # Analytical (time domain) — rebuild by summing p_s across spheres
 pressure_analytic = np.zeros((Nd, Nt), dtype=np.float32)
 for s_idx in range(Ns):
-    p_s, _ = build_per_sphere_true_traces(det, spheres[s_idx], t_vals, c, B=B, Cp=Cp)
+    p_s, _, _ = build_per_sphere_true_traces(det, spheres[s_idx], t_vals, c, B=B, Cp=Cp)
     pressure_analytic += p_s
 
 # EIR-only
@@ -218,7 +240,7 @@ elt_plot = 62 if Nd >= 63 else Nd - 1
 plt.figure(figsize=(10, 5))
 plt.plot(t_vals, pressure_analytic[elt_plot], label="Analytical (true)")
 plt.plot(t_vals, p_eir_only[elt_plot],      label="EIR only")
-plt.plot(t_vals, p_sir_eir[elt_plot],      label=f"SIR(X x Y ={n_div_x}×{n_div_y}) + EIR")
+plt.plot(t_vals, p_sir_eir[elt_plot],      label=f"SIR, (x, y) = {n_div_x}×{n_div_y}) + EIR")
 plt.title(f"Transducer element #{elt_plot+1} pressure vs time")
 plt.xlabel("time (µs)")
 plt.ylabel("pressure (arb.)")
