@@ -21,7 +21,8 @@ import matplotlib.colors as mcolors
 plt_trace = 1
 plt_das = 1
 bump_func = 1
-uniform = 1
+uniform = 0
+n_spheres = 6
 
 B  = 1.0
 Cp = 1.0
@@ -38,9 +39,9 @@ t_npoints = t_vals.size
 detectors_center = np.array([0.0, 0.0 , 0.0], dtype=np.float32)
 
 def make_spheres(n_spheres=1,
-                 x_bounds=(-15.0, 15.0),
-                 y_bounds=(-15.0, 15.0),
-                 z_bounds=(-35.0,  -5.0),
+                 x_bounds=(-12, 12),
+                 y_bounds=(-12, 12),
+                 z_bounds=(-32,  -8),
                  r_bounds=(  0.5,   2.0)):
     rng = np.random.default_rng(42)
     x = rng.uniform(*x_bounds, size=n_spheres).astype(np.float32)
@@ -214,11 +215,15 @@ det_x = det[:, 0][:, None]  # (Nd,1)
 det_y = det[:, 1][:, None]
 det_z = det[:, 2][:, None]  # (Nd,1)
 
+pressure_analytic = np.zeros((Nd, Nt), dtype=np.float32)
+
+
 for s_idx in range(Ns):
     sph = spheres[s_idx]
 
     # 1) True per-sphere time signal at each detector + center ranges r0(q)
     p_s, r0, bump = build_per_sphere_true_traces(det, sph, t_vals, c, B=B, Cp=Cp)  # p_s: (Nd,Nt), r0: (Nd,1)
+    pressure_analytic += p_s
 
     # FFT with zero-padding → P_s(q,f)
     P_s = fft.fft(np.concatenate([p_s, np.zeros_like(p_s)], axis=1), n=Npad, axis=1)  # (Nd,Npad)
@@ -275,10 +280,7 @@ p_sir_eir   = np.real(fft.ifft(P_sir_eir_f, n=Npad, axis=1))[:, :Nt].astype(np.f
 #   - EIR only (no SIR)
 # -----------------------------
 # Analytical (time domain) — rebuild by summing p_s across spheres
-pressure_analytic = np.zeros((Nd, Nt), dtype=np.float32)
-for s_idx in range(Ns):
-    p_s, _, _ = build_per_sphere_true_traces(det, spheres[s_idx], t_vals, c, B=B, Cp=Cp)
-    pressure_analytic += p_s
+
 
 # EIR-only
 P_true_f    = fft.fft(np.concatenate([pressure_analytic, np.zeros_like(pressure_analytic)], axis=1),
@@ -290,16 +292,17 @@ p_eir_only  = np.real(fft.ifft(P_eir_f, n=Npad, axis=1))[:, :Nt].astype(np.float
 # Plot single-element line (element #63 → index 62)
 # -----------------------------
 elt_plot = 62 if Nd >= 63 else Nd - 1
-plt.figure(figsize=(10, 5))
-plt.plot(t_vals, pressure_analytic[elt_plot], label="Analytical (true)")
-plt.plot(t_vals, p_eir_only[elt_plot],      label="EIR only")
-plt.plot(t_vals, p_sir_eir[elt_plot],      label=f"SIR, (x, y) = {n_div_x}×{n_div_y}) + EIR")
-plt.title(f"Transducer element #{elt_plot+1} pressure vs time")
-plt.xlabel("time (µs)")
-plt.ylabel("pressure (arb.)")
-plt.legend()
-plt.tight_layout()
-plt.show()
+if plt_trace:
+    plt.figure(figsize=(10, 5))
+    plt.plot(t_vals, pressure_analytic[elt_plot], label="Analytical (true)")
+    plt.plot(t_vals, p_eir_only[elt_plot],      label="EIR only")
+    plt.plot(t_vals, p_sir_eir[elt_plot],      label=f"SIR, (x, y) = {n_div_x}×{n_div_y}) + EIR")
+    plt.title(f"Transducer element #{elt_plot+1} pressure vs time")
+    plt.xlabel("time (µs)")
+    plt.ylabel("pressure (arb.)")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 # -----------------------------
 # DAS (delay-and-sum) helper with linear interp
